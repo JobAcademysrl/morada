@@ -1,0 +1,212 @@
+/* Morada · tema "portal": valores medidos con reverse-brand sobre un portal inmobiliario de referencia
+   (colores, tipografía, radios, sombras, alturas, curva de animación). Solo valores de estilo:
+   nombre, logo, textos, imágenes y código de Morada son propios. Se carga después de styles.css. */
+
+html:root:root, html:root:root[data-theme] {
+  --bg: #ffffff;
+  --bg-2: #e6f1f9;
+  --surface: #f5f6f7;
+  --surface-2: #ffffff;
+  --solid: #ffffff;
+  --line: #d5d7dd;
+  --line-2: #c4c8d0;
+  --fg: #373c47;
+  --muted: #60687a;
+  --faint: #8a91a1;
+  --brand: #0074c1;          /* azul: enlaces, cabecera móvil, pie */
+  --brand-2: #3390cd;
+  --brand-soft: #e6f1f9;
+  --warm: #fff1df;           /* banda cálida */
+  --accent: #e50013;         /* rojo: acción principal */
+  --accent-ink: #ffffff;
+  --accent-soft: rgba(229, 0, 19, 0.08);
+  --trust: #0f8763;
+  --trust-soft: rgba(15, 135, 99, 0.1);
+  --danger: #e50013;
+  --danger-soft: rgba(229, 0, 19, 0.08);
+  --info: #0074c1;
+  --sky-1: #0074c1; --sky-2: #0074c1; --sky-3: #3390cd; --sky-4: #e6f1f9;
+  --ridge-1: #0074c1; --ridge-2: #0074c1; --ridge-3: #0074c1;
+  --shadow: rgba(0, 49, 81, 0.16) 0 0 2px 0, rgba(0, 49, 81, 0.12) 0 1px 4px 0;
+  --shadow-hover: rgba(0, 49, 81, 0.16) 0 4px 8px 0, rgba(0, 49, 81, 0.16) 0 8px 24px 0;
+  --glow: var(--shadow);
+  --display: 'Inter', system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+  --body: var(--display);
+  --mono: var(--display);
+  --r: 16px;
+  --r-sm: 8px;
+  --header-h: 56px;
+  --ease: cubic-bezier(0.4, 0, 0.2, 1);
+  --dur: 250ms;
+  color-scheme: light;
+}
+@media (max-width: 750px) { html:root:root, html:root:root[data-theme] { --header-h: 48px; } }
+
+/* Tipografía: Inter 400/600, cuerpo 14px, títulos 56/40/24 con clamp() entre 390 y 1440px. */
+body { font: 400 14px/1.43 var(--body); background: var(--bg); color: var(--fg); }
+h1, h2, h3, h4 { font-family: var(--display); letter-spacing: 0; font-weight: 600; line-height: 1.2; }
+h1 { font-size: clamp(2.5rem, 2.129rem + 1.524vw, 3.5rem); }
+h2 { font-size: clamp(1.5rem, 1.129rem + 1.524vw, 2.5rem); }
+h3 { font-size: clamp(1.25rem, 1.157rem + 0.381vw, 1.5rem); line-height: 1.333; letter-spacing: -0.021em; }
+.mono, .money, .num { font-family: var(--body); font-variant-numeric: tabular-nums; }
+.eyebrow { font: 600 .75rem/1 var(--body); letter-spacing: .04em; color: var(--brand); }
+:focus-visible { outline-color: var(--brand); }
+a:hover { color: inherit; }
+
+/* Botones: rectángulo 8px, 48px de alto, etiqueta en mayúsculas 14px/500. */
+.btn { min-height: 48px; padding: 0 16px; border-radius: 8px; border: 1px solid var(--line); background: #fff; color: var(--brand); font: 500 14px/1 var(--body); text-transform: uppercase; transition: background-color var(--dur) var(--ease), border-color var(--dur) var(--ease), box-shadow var(--dur) var(--ease), color var(--dur) var(--ease); }
+.btn:hover { transform: none; border-color: var(--brand); }
+.btn:active { transform: none; }
+.btn-primary { background: var(--accent); color: #fff; border-color: transparent; box-shadow: none; }
+.btn-primary:hover { background: #c70011; box-shadow: none; border-color: transparent; }
+.btn-ghost { background: transparent; border-color: transparent; color: var(--brand); }
+.btn-ghost:hover { background: var(--brand-soft); border-color: transparent; }
+.btn-trust { background: var(--trust); color: #fff; }
+.btn-sm { min-height: 40px; padding: 0 12px; font-size: 13px; }
+.icon-btn { border-radius: 8px; border-color: var(--line); background: #fff; color: var(--brand); }
+.input, select.input, textarea.input { min-height: 48px; border-radius: 8px; border-color: var(--line); background: #fff; color: var(--fg); font-size: 14px; transition: border-color var(--dur) var(--ease), box-shadow var(--dur) var(--ease); }
+.input:focus { border-color: var(--brand); box-shadow: 0 0 0 3px rgba(0, 116, 193, 0.15); }
+.check input { accent-color: var(--brand); }
+.pill span { border-color: var(--line); background: #fff; transition: all var(--dur) var(--ease); }
+.pill input:checked + span { background: var(--brand-soft); border-color: var(--brand); color: var(--brand); }
+.seg { border-radius: 8px; background: var(--surface); }
+.seg button { border-radius: 6px; text-transform: uppercase; font-size: 13px; font-weight: 500; }
+.seg button.on { background: #fff; color: var(--brand); box-shadow: var(--shadow); }
+.chip { background: rgba(55, 60, 71, .8); backdrop-filter: none; }
+.chip-gold { background: var(--accent); color: #fff; }
+.chip-ok { background: var(--trust); color: #fff; }
+.tag-warn { color: var(--accent); border-color: var(--accent); }
+.panel { background: #fff; border-color: transparent; box-shadow: var(--shadow); backdrop-filter: none; }
+
+/* Cabecera: blanca, 56px, sin desenfoque; en móvil azul de marca con contenido blanco. */
+.progress { display: none; }
+.header, .header.solid, .header.always { background: #fff; backdrop-filter: none; border-color: var(--line); transition: none; }
+.logo { font: 700 1.25rem/1 var(--display); letter-spacing: -0.02em; color: var(--brand); }
+.logo small { font-family: var(--body); }
+.logo-mark { width: 32px; height: 32px; transition: transform var(--dur) var(--ease); }
+.logo:hover .logo-mark { transform: translateY(-1px); }
+.logo-word { font: 700 1.375rem/1 var(--display); letter-spacing: -0.03em; color: var(--brand); }
+.logo-word b { font-weight: 700; color: var(--accent); }
+.nav a { border-radius: 8px; color: var(--fg); font-size: 14px; font-weight: 500; }
+.nav a:hover, .nav a.on { color: var(--brand); background: var(--brand-soft); }
+.rate, .cur { border-color: var(--line); border-radius: 8px; font-family: var(--body); }
+.cur button { border-radius: 6px; font-family: var(--body); }
+.cur button.on { background: var(--brand); color: #fff; }
+#theme-btn, #m-theme { display: none !important; }
+@media (max-width: 750px) {
+  .header, .header.solid, .header.always { background: var(--brand); border-color: transparent; color: #fff; }
+  .header .logo, .header .icon-btn { color: #fff; }
+  .header .logo { --logo-bg: #fff; --logo-fg: #0074c1; }
+  .header .logo-word, .header .logo-word b { color: #fff; }
+  .header .icon-btn { background: transparent; border-color: rgba(255, 255, 255, .4); }
+  .header .btn { background: #fff; color: var(--brand); border-color: transparent; }
+  .header .cur { border-color: rgba(255, 255, 255, .4); }
+  .header .cur button { color: rgba(255, 255, 255, .8); }
+  .header .cur button.on { background: #fff; color: var(--brand); }
+}
+.mobile-nav { background: #fff; transition: opacity var(--dur) var(--ease), transform var(--dur) var(--ease); }
+.mobile-nav a, .mobile-nav button { font: 500 1rem/1.2 var(--body); }
+
+/* Movimiento: transiciones de 250ms con la misma curva; sin parallax, desenfoque ni inclinación 3D. */
+#view.leaving { transition: opacity var(--dur) var(--ease), transform var(--dur) var(--ease); transform: none; }
+#view.entering { animation: rb-fade var(--dur) var(--ease); }
+@keyframes rb-fade { from { opacity: 0; } to { opacity: 1; } }
+.rv, .rv.in { opacity: 1; transform: none; filter: none; transition: none; }
+.sun, .layer, .cable, .hero-fade { display: none !important; }
+.marquee-track { animation-duration: 80s; font-family: var(--body); }
+
+/* Portada: banda azul claro con buscador blanco y CTA rojo. */
+.hero { background: var(--bg-2); margin-top: 0; padding-top: clamp(40px, 7vw, 88px); padding-bottom: clamp(48px, 8vw, 96px); }
+.sky { background: var(--bg-2); }
+.hero h1 { color: var(--fg); text-shadow: none; }
+.hero h1 em { background: none; -webkit-background-clip: border-box; background-clip: border-box; color: var(--brand); }
+.hero-lead { color: var(--muted); }
+.hero .eyebrow { color: var(--brand); }
+.hero-stats { color: var(--fg); }
+.hero-stats b { font-family: var(--body); color: var(--brand); }
+.hero-stats span { color: var(--muted); }
+.searchbox { background: #fff; border: 0; border-radius: 16px; box-shadow: var(--shadow-hover); backdrop-filter: none; color: var(--fg); }
+.searchbox .seg { background: var(--surface); border-color: transparent; }
+.searchbox .seg button { color: var(--muted); }
+.searchbox .seg button.on { background: #fff; color: var(--brand); }
+.searchbox .input { background: #fff; color: var(--fg); border-color: var(--line); }
+.ac-list { border-radius: 8px; border-color: var(--line); }
+
+/* Secciones y bloques. */
+.section-head p { color: var(--muted); font-size: 1rem; }
+.story-visual { border-radius: 16px; box-shadow: var(--shadow); border-color: transparent; background: var(--bg-2); }
+.story-visual .frame { transition: opacity var(--dur) var(--ease); transform: none; }
+.story-step { transition: opacity var(--dur) var(--ease); }
+.story-step .num { color: var(--brand); }
+.mock-card { border-radius: 16px; border-color: transparent; }
+.mock-bar i, .meter, .bar-row .track i { background: var(--brand); }
+.seg-card { border-radius: 16px; background: #fff; border: 0; box-shadow: var(--shadow); }
+.seg-card::after { display: none; }
+.seg-card .k { font-family: var(--body); color: var(--brand); }
+.zone { border-radius: 16px; background: #fff; border-color: transparent; box-shadow: var(--shadow); transition: box-shadow var(--dur) var(--ease); }
+.zone:hover { transform: none; border-color: transparent; box-shadow: var(--shadow-hover); }
+.plan { border-radius: 16px; background: #fff; border-color: transparent; box-shadow: var(--shadow); }
+.plan.hot { background: #fff; border: 2px solid var(--brand); }
+.plan .price-big { font-family: var(--body); }
+.plan li .ic { color: var(--brand); }
+.cta-band { border-radius: 16px; background: var(--warm); }
+.cta-band p { color: var(--muted); }
+
+/* Tarjetas: 16px, sombra suave, sin borde ni inclinación; la sombra crece al pasar el cursor. */
+.card { border-radius: 16px; border: 0; background: #fff; box-shadow: var(--shadow); transition: box-shadow var(--dur) var(--ease); transform: none !important; }
+.card::after { display: none; }
+.card:hover { box-shadow: var(--shadow-hover); }
+.card.is-boosted { box-shadow: 0 0 0 2px var(--brand), var(--shadow); }
+.card.hl { box-shadow: 0 0 0 2px var(--accent), var(--shadow-hover); }
+.card-media img, .card:hover .card-media img { transition: none; transform: none; }
+.card-title:hover { color: var(--brand); }
+.card-price .money { font-size: 1.25rem; }
+.fav { background: rgba(255, 255, 255, .92); color: var(--fg); backdrop-filter: none; }
+.fav.on { color: var(--accent); }
+.ind { font-family: var(--body); border-radius: 4px; }
+.ind-alto { color: var(--accent); }
+
+/* Búsqueda y mapa. */
+.filters-bar { background: #fff; backdrop-filter: none; }
+.map-tools .btn.on { background: var(--brand); color: #fff; }
+.pm { font-family: var(--body); border-radius: 8px; }
+.pm.b { background: var(--accent); color: #fff; }
+.pm.hl, .pm:hover { background: var(--brand); color: #fff; }
+.cl { background: color-mix(in srgb, var(--brand) 90%, transparent); color: #fff; font-family: var(--body); box-shadow: 0 0 0 6px rgba(0, 116, 193, .25); }
+.zone-label { font-family: var(--body); }
+
+/* Ficha, panel, herramientas. */
+.gallery { border-radius: 16px; }
+.gallery img, .gallery button:hover img { transition: none; transform: none; }
+.facts { border-radius: 16px; }
+.facts b, .kpi b, .result-big, .big-price .money { font-family: var(--body); }
+.avatar { background: var(--brand); border-radius: 8px; }
+.doc-row, .kpi, .kcol, .law-item, .flow > div, .table-wrap, .contract, .mini-map, .pick-map, .dropzone { border-radius: 16px; }
+th { font-family: var(--body); letter-spacing: .02em; background: var(--surface); }
+.kcol h4, .contract h4, .law-item .art, .flow > div::before { font-family: var(--body); color: var(--brand); }
+.steps button.on { border-color: var(--brand); }
+.dash-nav a { border-radius: 8px; }
+.dash-nav a.on { background: var(--brand-soft); color: var(--brand); }
+.modal { border-radius: 16px; border: 0; box-shadow: var(--shadow-hover); transition: opacity var(--dur) var(--ease), transform var(--dur) var(--ease); }
+.modal-backdrop { background: rgba(0, 0, 0, .4); backdrop-filter: none; transition: opacity var(--dur) var(--ease); }
+.toast { border-radius: 8px; background: var(--fg); color: #fff; transition: opacity var(--dur) var(--ease), transform var(--dur) var(--ease); }
+.auth-art { background: var(--brand); }
+
+/* Pie: azul de marca con texto blanco. */
+.footer { background: var(--brand); color: rgba(255, 255, 255, .85); border-top: 0; margin-top: 64px; }
+.footer-grid a:hover, .footer h4 { color: #fff; }
+.footer h4 { font-family: var(--body); letter-spacing: .04em; }
+.footer .logo { display: inline-flex; align-items: center; gap: 10px; color: #fff; --logo-bg: #fff; --logo-fg: #0074c1; text-decoration: none; }
+.footer .logo-word, .footer .logo-word b { color: #fff; }
+.demo-banner { background: var(--brand-soft); color: var(--brand); border-color: transparent; }
+.demo-banner button { color: var(--brand); }
+
+/* Pago */
+.pay-total { margin: 4px 0 2px; font-size: 1.05rem; }
+.pay-methods { display: grid; gap: 8px; }
+.pay-method { display: flex; align-items: center; justify-content: space-between; gap: 12px; width: 100%; padding: 12px 14px; border: 1px solid var(--line); border-radius: 8px; background: var(--bg); color: var(--fg); font: inherit; text-align: left; cursor: pointer; transition: border-color var(--dur) var(--ease), box-shadow var(--dur) var(--ease); }
+.pay-method .faint { font-size: .82rem; font-weight: 400; }
+.pay-method:hover { box-shadow: var(--shadow); }
+.pay-method.on { border-color: var(--brand); box-shadow: 0 0 0 1px var(--brand); }
+.pay-method:disabled { opacity: .6; cursor: progress; }
+.pay-info { display: grid; grid-template-columns: max-content minmax(0, 1fr); gap: 6px 14px; font-size: .9rem; }
