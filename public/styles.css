@@ -220,7 +220,14 @@ textarea.input { min-height: 110px; resize: vertical; }
 .story-step.on { opacity: 1; }
 .story-step .num { font-size: .8rem; color: var(--accent); }
 .story-step p { color: var(--muted); font-size: 1.05rem; max-width: 46ch; }
-@media (max-width: 860px) { .story { grid-template-columns: 1fr; } .story-visual { position: relative; top: 0; height: 340px; } .story-steps { gap: 40px; padding-block: 10px; } .story-step { opacity: 1; } }
+/* Mobile: il visual resta ancorato sotto l'header e i passi scorrono sotto di esso */
+@media (max-width: 860px) {
+  .story { grid-template-columns: 1fr; gap: 0; }
+  .story-visual { top: calc(var(--header-h) + env(safe-area-inset-top, 0px) + 8px); height: min(300px, 42vh); z-index: 2; outline: 8px solid var(--bg); }
+  .story-visual .frame { padding: 16px; }
+  .story-steps { gap: 28vh; padding-block: 6vh 22vh; }
+  .story-step h3 { font-size: 1.4rem !important; }
+}
 
 .mock { width: 100%; max-width: 380px; display: grid; gap: 12px; }
 .mock-card { padding: 14px 16px; border-radius: 16px; background: var(--solid); border: 1px solid var(--line); box-shadow: var(--shadow); display: grid; gap: 6px; }

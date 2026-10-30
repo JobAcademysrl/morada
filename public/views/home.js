@@ -214,7 +214,7 @@ export default async function home(el, ctx) {
     const i = Number(e.target.dataset.step);
     steps.forEach(s => s.classList.toggle('on', s === e.target));
     frames.forEach(f => f.classList.toggle('on', Number(f.dataset.frame) === i));
-  }), { rootMargin: '-45% 0px -45% 0px' });
+  }), { rootMargin: matchMedia('(max-width: 860px)').matches ? '-62% 0px -20% 0px' : '-45% 0px -45% 0px' });
   steps.forEach(s => sio.observe(s));
 
   /* Segmentos: desplazamiento horizontal ligado al scroll vertical */
