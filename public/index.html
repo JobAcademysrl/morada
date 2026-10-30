@@ -1,0 +1,55 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Morada Venezuela</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<meta name="description" content="Portal inmobiliario venezolano: compra, venta y alquiler con precios en USD y bolívares, títulos verificados y herramientas para agencias.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,600;12..96,700&family=Figtree:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap">
+<link rel="icon" href="favicon.svg" type="image/svg+xml">
+<link rel="stylesheet" href="vendor/leaflet.css">
+<link rel="stylesheet" href="vendor/MarkerCluster.css">
+<link rel="stylesheet" href="styles.css">
+<link rel="stylesheet" href="theme-portal.css">
+</head>
+<body>
+<div class="progress" id="progress"></div>
+<div class="demo-banner" id="demo-banner" hidden></div>
+<header class="header" id="header">
+  <div class="wrap">
+    <a class="logo" href="#/" aria-label="Morada, inicio">
+      <svg class="logo-mark" viewBox="0 0 32 32" aria-hidden="true"><rect width="32" height="32" rx="8" fill="var(--logo-bg, #0074c1)"/><path d="M7 24V13.5L12 8.5l4 4 4-4 5 5V24" fill="none" stroke="var(--logo-fg, #fff)" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/><circle cx="16" cy="20.5" r="2.4" fill="#e50013"/></svg>
+      <span class="logo-word">morada<b>.ve</b></span>
+    </a>
+    <nav class="nav" id="nav" aria-label="Principal">
+      <a href="#/buscar?op=venta" data-nav="venta">Comprar</a>
+      <a href="#/buscar?op=alquiler" data-nav="alquiler">Alquilar</a>
+      <a href="#/buscar?project=1&op=venta" data-nav="obra">Obra nueva</a>
+      <a href="#/valorar" data-nav="valorar">Valorar</a>
+      <a href="#/inversores" data-nav="inversores">Diáspora</a>
+      <a href="#/profesionales" data-nav="profesionales">Profesionales</a>
+    </nav>
+    <div class="header-right">
+      <span class="rate" id="rate" title="Tasa oficial de referencia BCV usada para convertir precios"></span>
+      <div class="cur" role="group" aria-label="Moneda"><button data-cur="usd">USD</button><button data-cur="ves">Bs.</button></div>
+      <button class="icon-btn" id="theme-btn" aria-label="Cambiar tema"></button>
+      <a class="icon-btn" href="#/favoritos" aria-label="Favoritos" id="fav-link"></a>
+      <span id="user-slot"></span>
+      <a class="btn btn-primary btn-sm btn-publish" href="#/publicar" id="publish-btn"></a>
+      <button class="icon-btn burger" id="burger" aria-label="Menú" aria-expanded="false"></button>
+    </div>
+  </div>
+</header>
+<nav class="mobile-nav" id="mobile-nav" aria-label="Menú móvil"></nav>
+<main id="view" tabindex="-1"></main>
+<footer class="footer" id="footer"></footer>
+<div id="modal-root" hidden></div>
+<div id="toasts" aria-live="polite"></div>
+<script src="vendor/leaflet.js"></script>
+<script src="vendor/leaflet.markercluster.js"></script>
+<script type="module" src="app.js"></script>
+</body>
+</html>
