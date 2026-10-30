@@ -80,6 +80,23 @@ export const PLANS = {
 export const PRIVATE_FREE_LISTINGS = 1;
 export const PRIVATE_EXTRA_PRICE = 9;
 
+// Métodos de cobro. "card" requiere Stripe en el servidor; los locales se activan cuando el
+// administrador carga sus datos de cobro y se confirman a mano con la referencia del cliente.
+export const PAY_METHODS = {
+  card: { id: 'card', name: 'Tarjeta internacional', currency: 'usd', desc: 'Visa, Mastercard, Amex. Pago seguro con Stripe.' },
+  pago_movil: { id: 'pago_movil', name: 'Pago Móvil', currency: 'ves', desc: 'En bolívares a la tasa BCV del día.' },
+  transferencia: { id: 'transferencia', name: 'Transferencia en bolívares', currency: 'ves', desc: 'Desde cualquier banco venezolano.' },
+  zelle: { id: 'zelle', name: 'Zelle', currency: 'usd', desc: 'En dólares desde una cuenta en EE. UU.' },
+  usdt: { id: 'usdt', name: 'USDT', currency: 'usd', desc: 'Stablecoin en la red indicada.' },
+};
+// Campos de los datos de cobro que el administrador completa para cada método local.
+export const PAY_FIELDS = {
+  pago_movil: [['bank', 'Banco'], ['phone', 'Teléfono'], ['id', 'Cédula / RIF']],
+  transferencia: [['bank', 'Banco'], ['account', 'Número de cuenta'], ['holder', 'Titular'], ['id', 'Cédula / RIF']],
+  zelle: [['email', 'Correo Zelle'], ['holder', 'Titular']],
+  usdt: [['network', 'Red (TRC20, BEP20…)'], ['address', 'Dirección']],
+};
+
 export const BOOSTS = {
   destacado: { id: 'destacado', name: 'Destacado', price: 12, days: 15, desc: 'Etiqueta y borde destacado en resultados' },
   top: { id: 'top', name: 'Top en zona', price: 25, days: 15, desc: 'Primeras posiciones en tu zona y en el mapa' },

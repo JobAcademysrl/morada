@@ -74,3 +74,36 @@ test('lectura de la tasa BCV', async () => {
   const s = await e.refreshRate();
   assert.equal(s.rate, 241.5); assert.equal(s.rateSource, 'bcv');
 });
+
+test('con pasarela: tarjeta queda pendiente hasta Stripe y los pagos locales hasta el admin', async () => {
+  const sessions = {};
+  const payments = { card: { create: async o => (sessions['cs_' + o.id] = { paid: false }, { id: 'cs_' + o.id, url: 'https://checkout.test/' + o.id }), fetch: async id => sessions[id] } };
+  const e = createEngine({ db: await seedDb(emptyDb()), payments });
+  const admin = await login(e, 'admin@morada.demo');
+  const meta0 = (await e.handle('GET', '/api/meta')).body;
+  assert.deepEqual(meta0.checkout.methods, ['card']);
+  await e.handle('POST', '/api/admin/payinfo', { token: admin, body: { pago_movil: { bank: '0102', phone: '04141234567', id: 'J-1' } } });
+  const r = await e.handle('POST', '/api/auth/register', { body: { name: 'Ag', email: 'ag@x.com', password: '12345678', role: 'agencia' } });
+  const token = r.body.token;
+  // Tarjeta
+  const c = (await e.handle('POST', '/api/me/plan', { token, body: { plan: 'professional', method: 'card' } })).body;
+  assert.equal(c.paid, false); assert.ok(c.checkoutUrl);
+  assert.equal((await e.handle('GET', '/api/me', { token })).body.plan.id, 'prueba');
+  sessions['cs_' + c.order.id].paid = true;
+  assert.equal((await e.handle('POST', `/api/orders/${c.order.id}/refresh`, { token })).body.status, 'paid');
+  assert.equal((await e.handle('GET', '/api/me', { token })).body.plan.id, 'professional');
+  // Pago Móvil sin referencia falla; con referencia queda en revisión
+  assert.equal((await e.handle('POST', '/api/me/plan', { token, body: { plan: 'promax', method: 'pago_movil' } })).status, 400);
+  assert.equal((await e.handle('POST', '/api/me/plan', { token, body: { plan: 'promax', method: 'zelle', reference: '12345' } })).status, 400);
+  const pm = (await e.handle('POST', '/api/me/plan', { token, body: { plan: 'promax', method: 'pago_movil', reference: '00123456' } })).body;
+  assert.equal(pm.order.status, 'review'); assert.ok(pm.order.amountVes > 0);
+  const queue = (await e.handle('GET', '/api/admin/orders', { token: admin, query: { status: 'review' } })).body;
+  assert.equal(queue.length, 1);
+  await e.handle('POST', `/api/admin/orders/${pm.order.id}`, { token: admin, body: { approve: true } });
+  assert.equal((await e.handle('GET', '/api/me', { token })).body.plan.id, 'promax');
+  // Webhook
+  const d = (await e.handle('POST', '/api/diligence', { token, body: { listingId: 'm1001', package: 'basico', method: 'card' } })).body;
+  assert.equal(d.diligence, null);
+  await e.settle(d.order.id, 'cs_x');
+  assert.equal((await e.handle('GET', '/api/diligence', { token })).body.length, 1);
+});

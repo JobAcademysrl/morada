@@ -2,7 +2,7 @@
 // y al modo demo del navegador (persistencia en localStorage).
 import {
   PLANS, BOOSTS, DILIGENCE, ROLES, LEAD_STAGES, ZONES, CITIES, TYPES, FEATURES, STATES, PAYMENTS, DOC_KINDS,
-  SERVICE_CATEGORIES, PRIVATE_FREE_LISTINGS, PRIVATE_EXTRA_PRICE, OPERATIONS, LAW,
+  SERVICE_CATEGORIES, PRIVATE_FREE_LISTINGS, PRIVATE_EXTRA_PRICE, OPERATIONS, LAW, PAY_METHODS, PAY_FIELDS,
   estimateValue, priceIndicator, inBbox, inPolygon, buildLeaseContract, usdToVes, vesToUsd, listingTitle, zoneById, referralSplit,
 } from './core.js';
 import { DEMO_USERS, DEMO_PASSWORD, seedListings, seedLeads } from './seed.js';
@@ -18,12 +18,12 @@ const enc = new TextEncoder();
 const hex = buf => [...new Uint8Array(buf)].map(b => b.toString(16).padStart(2, '0')).join('');
 const randomId = (prefix = '', bytes = 9) => prefix + hex(globalThis.crypto.getRandomValues(new Uint8Array(bytes)).buffer);
 
-async function hashPassword(password, salt = randomId('', 16)) {
+export async function hashPassword(password, salt = randomId('', 16)) {
   const key = await subtle.importKey('raw', enc.encode(password), 'PBKDF2', false, ['deriveBits']);
   const bits = await subtle.deriveBits({ name: 'PBKDF2', hash: 'SHA-256', salt: enc.encode(salt), iterations: 60000 }, key, 256);
   return `${salt}:${hex(bits)}`;
 }
-async function checkPassword(password, stored) {
+export async function checkPassword(password, stored) {
   const [salt] = String(stored).split(':');
   return (await hashPassword(password, salt)) === stored;
 }
@@ -31,11 +31,11 @@ async function checkPassword(password, stored) {
 const now = () => new Date().toISOString();
 const clean = s => (s == null ? '' : String(s).trim().slice(0, 4000));
 const num = (v, d = null) => (v === '' || v == null || isNaN(Number(v)) ? d : Number(v));
-const publicUser = u => u && ({ id: u.id, role: u.role, name: u.name, company: u.company || '', phone: u.phone || '', email: u.email, plan: u.plan || null, civ: u.civ || '', preani: !!u.preani, country: u.country || 'Venezuela', license: u.license || '', zones: u.zones || [], extraSlots: u.extraSlots || 0, createdAt: u.createdAt });
+const publicUser = u => u && ({ id: u.id, role: u.role, name: u.name, company: u.company || '', phone: u.phone || '', email: u.email, plan: u.plan || null, planUntil: u.planUntil || null, civ: u.civ || '', preani: !!u.preani, country: u.country || 'Venezuela', license: u.license || '', zones: u.zones || [], extraSlots: u.extraSlots || 0, createdAt: u.createdAt });
 const ownerCard = u => u && ({ id: u.id, name: u.company || u.name, role: u.role, phone: u.phone || '', civ: u.civ || '', preani: !!u.preani, badge: !!PLANS[u.plan]?.badge });
 
 export function emptyDb() {
-  return { version: 1, users: [], sessions: {}, listings: [], leads: [], favorites: {}, searches: [], contracts: [], payments: [], referrals: [], diligence: [], services: [], orders: [], settings: { rate: 236.5, rateUpdatedAt: '2026-10-28T12:00:00Z', rateAuto: true, rateSource: 'manual', rateError: null } };
+  return { version: 1, users: [], sessions: {}, listings: [], leads: [], favorites: {}, searches: [], contracts: [], payments: [], referrals: [], diligence: [], services: [], orders: [], settings: { rate: 236.5, rateUpdatedAt: '2026-10-28T12:00:00Z', rateAuto: true, rateSource: 'manual', rateError: null, payInfo: {} } };
 }
 
 export async function seedDb(db) {
@@ -67,9 +67,12 @@ const route = (method, pattern, handler, opts = {}) => {
   routes.push({ method, re, keys, handler, ...opts });
 };
 
-export function createEngine({ db, save = () => {}, storeFile = async dataUrl => dataUrl, fetchRate = null }) {
-  db.settings = { rateAuto: true, rateSource: 'manual', rateError: null, ...db.settings };
-  const ctx = { db, save, storeFile, fetchRate };
+export function createEngine({ db, save = () => {}, storeFile = async dataUrl => dataUrl, signFile = async url => url, fetchRate = null, payments = null }) {
+  db.settings = { rateAuto: true, rateSource: 'manual', rateError: null, payInfo: {}, ...db.settings };
+  db.orders ||= [];
+  // payments: { card: { create(order, returnUrl) -> { id, url }, fetch(id) -> { paid } } | null }.
+  // Sin "payments" (modo demo o servidor local) los cobros se aprueban al instante.
+  const ctx = { db, save, storeFile, signFile, fetchRate, payments };
   // Actualiza la tasa desde la fuente oficial; la usa el servidor de forma periódica y el botón del administrador.
   async function refreshRate() {
     if (!fetchRate) throw new HttpError(501, 'La lectura automática de la tasa solo está disponible con el servidor.');
@@ -104,12 +107,24 @@ export function createEngine({ db, save = () => {}, storeFile = async dataUrl =>
       return { status: 500, body: { error: 'Error interno.' } };
     }
   }
-  return { handle, db, refreshRate };
+  // Confirmación de un pago con tarjeta desde el webhook de Stripe.
+  async function settle(orderId, ref) {
+    const o = db.orders.find(x => x.id === orderId);
+    if (!o || o.status === 'paid') return o || null;
+    applyOrder(db, o, { by: 'stripe', ref });
+    await save();
+    return o;
+  }
+  return { handle, db, refreshRate, settle };
 }
 
 /* ------------------------------ Helpers de dominio ------------------------------ */
 
-function planOf(u) { return PLANS[u?.plan] || PLANS.prueba; }
+function planOf(u) {
+  // Un plan pagado vence a los 30 días si no se renueva; las cuentas sin fecha (demo) no vencen.
+  if (u?.planUntil && Date.parse(u.planUntil) < Date.now()) return PLANS.prueba;
+  return PLANS[u?.plan] || PLANS.prueba;
+}
 function needFeature(u, feature) {
   if (u.role === 'admin') return;
   if (!planOf(u)[feature]) fail(402, `Esta función requiere un plan superior (${feature === 'network' || feature === 'contracts' ? 'Agency Pro Max' : 'Professional o Pro Max'}).`);
@@ -243,7 +258,8 @@ const SORTS = {
 
 route('GET', '/api/health', () => ({ ok: true }));
 
-route('GET', '/api/meta', ({ db }) => ({
+route('GET', '/api/meta', ({ db, ...ctx }) => ({
+  checkout: { live: !!ctx.payments, methods: enabledMethods({ db, ...ctx }) }, payMethods: PAY_METHODS,
   zones: ZONES, cities: CITIES, types: TYPES, features: FEATURES, states: STATES, payments: PAYMENTS, docKinds: DOC_KINDS,
   plans: Object.values(PLANS).map(p => ({ ...p, listings: p.listings === Infinity ? null : p.listings })),
   boosts: BOOSTS, diligence: DILIGENCE, roles: ROLES, leadStages: LEAD_STAGES, services: SERVICE_CATEGORIES, operations: OPERATIONS, law: LAW,
@@ -292,24 +308,133 @@ route('PATCH', '/api/me', ({ user, body }) => {
   return { user: publicUser(user) };
 }, { auth: true });
 
-// Checkout simulado: en producción se conecta a la pasarela de pago.
-route('POST', '/api/me/plan', ({ db, user, body }) => {
+// Planes y avisos adicionales: pasan por el cobro (ver "Cobros").
+route('POST', '/api/me/plan', async ctx => {
+  const { user, body } = ctx;
   if (!['agencia', 'constructora', 'internacional'].includes(user.role)) fail(403, 'Los planes son para cuentas profesionales.');
   const p = PLANS[body.plan];
   if (!p || p.id === 'prueba') fail(400, 'Plan no válido.');
-  user.plan = p.id;
-  db.orders.push({ id: randomId('o-', 6), userId: user.id, kind: 'plan', item: p.id, amountUsd: p.price, createdAt: now() });
-  return { user: publicUser(user) };
+  const r = await checkout(ctx, user, body, { kind: 'plan', item: p.id, title: `${p.name} (30 días)`, amountUsd: p.price });
+  return { ...r, user: publicUser(user) };
 }, { auth: true });
 
-route('POST', '/api/me/slots', ({ db, user, body }) => {
+route('POST', '/api/me/slots', async ctx => {
+  const { db, user, body } = ctx;
   const qty = Math.max(1, Math.min(10, num(body.qty, 1)));
-  user.extraSlots = (user.extraSlots || 0) + qty;
-  db.orders.push({ id: randomId('o-', 6), userId: user.id, kind: 'slot', item: qty, amountUsd: qty * PRIVATE_EXTRA_PRICE, createdAt: now() });
-  return { user: publicUser(user), quota: listingQuota(user, db) };
+  const r = await checkout(ctx, user, body, { kind: 'slot', item: qty, title: `× ${qty}`, amountUsd: qty * PRIVATE_EXTRA_PRICE });
+  return { ...r, user: publicUser(user), quota: listingQuota(user, db) };
 }, { auth: true, roles: ['particular', 'comprador'] });
 
-route('GET', '/api/me/orders', ({ db, user }) => db.orders.filter(o => o.userId === user.id).reverse(), { auth: true, write: false });
+/* Cobros */
+
+const ORDER_LABEL = { plan: 'Plan', boost: 'Visibilidad', slot: 'Aviso adicional', diligence: 'Due diligence', lead: 'Lead calificado' };
+const payInfoOf = db => db.settings.payInfo || {};
+function enabledMethods(ctx) {
+  if (!ctx.payments) return [];
+  const info = payInfoOf(ctx.db);
+  return Object.keys(PAY_METHODS).filter(m => (m === 'card' ? !!ctx.payments.card : PAY_FIELDS[m].every(([k]) => clean(info[m]?.[k]))));
+}
+function orderView(o, db) {
+  return { ...o, label: `${ORDER_LABEL[o.kind] || o.kind} ${o.title || o.item}`, status: o.status || 'paid', amountVes: o.amountVes ?? null };
+}
+
+// Aplica el efecto de una orden pagada.
+function applyOrder(db, o, { by = 'auto', ref = '' } = {}) {
+  const u = db.users.find(x => x.id === o.userId);
+  if (o.kind === 'plan' && u) {
+    const from = Math.max(Date.now(), u.plan === o.item && u.planUntil ? Date.parse(u.planUntil) : 0);
+    u.plan = o.item; u.planUntil = new Date(from + 30 * 86400000).toISOString();
+  }
+  if (o.kind === 'slot' && u) u.extraSlots = (u.extraSlots || 0) + Number(o.item);
+  if (o.kind === 'boost') {
+    const [kind, id] = String(o.item).split(':');
+    const l = db.listings.find(x => x.id === id);
+    if (l) applyBoost(l, BOOSTS[kind]);
+  }
+  if (o.kind === 'diligence') {
+    const [pkgId, id] = String(o.item).split(':');
+    const pkg = DILIGENCE[pkgId], l = db.listings.find(x => x.id === id);
+    if (pkg && l && !db.diligence.some(d => d.orderId === o.id)) db.diligence.push({ id: randomId('dd-', 6), orderId: o.id, userId: o.userId, listingId: l.id, listingTitle: l.title, package: pkg.id, priceUsd: pkg.price, status: 'en curso', steps: pkg.items.map(i => ({ item: i, done: false })), createdAt: now() });
+  }
+  Object.assign(o, { status: 'paid', paidAt: now(), confirmedBy: by, ...(ref ? { providerRef: ref } : {}) });
+}
+
+function applyBoost(l, b) {
+  l.boost = { kind: b.id === 'newsletter' ? (l.boost?.kind || 'destacado') : b.id, until: new Date(Date.now() + b.days * 86400000).toISOString(), newsletter: b.id === 'newsletter' || l.boost?.newsletter };
+}
+
+// Crea la orden. Sin pasarela (demo) o con monto 0 se paga al instante; con pasarela queda
+// pendiente hasta que Stripe la confirma o el administrador verifica la referencia.
+async function checkout(ctx, user, body, { kind, item, title, amountUsd }) {
+  const { db } = ctx;
+  if (body.quote) return { quote: { amountUsd, title: `${ORDER_LABEL[kind]} ${title}` } };
+  const o = { id: randomId('o-', 6), userId: user.id, kind, item, title, amountUsd, createdAt: now() };
+  if (!ctx.payments || amountUsd === 0) {
+    db.orders.push(o);
+    applyOrder(db, o, { by: ctx.payments ? 'auto' : 'demo' });
+    return { paid: true, order: orderView(o, db) };
+  }
+  const method = body.method;
+  if (!enabledMethods(ctx).includes(method)) fail(400, 'Elige un método de pago disponible.');
+  o.method = method;
+  if (PAY_METHODS[method].currency === 'ves') { o.rate = db.settings.rate; o.amountVes = usdToVes(amountUsd, o.rate); }
+  if (method === 'card') {
+    const s = await ctx.payments.card.create(o, clean(body.returnUrl));
+    Object.assign(o, { status: 'pending', providerRef: s.id });
+    db.orders.push(o);
+    return { paid: false, order: orderView(o, db), checkoutUrl: s.url };
+  }
+  const reference = clean(body.reference).slice(0, 120);
+  if (reference.length < 4) fail(400, 'Indica la referencia o el número de operación del pago.');
+  Object.assign(o, { status: 'review', reference });
+  db.orders.push(o);
+  return { paid: false, order: orderView(o, db) };
+}
+
+route('GET', '/api/pay/options', ctx => {
+  const info = payInfoOf(ctx.db), methods = enabledMethods(ctx);
+  return { live: !!ctx.payments, rate: ctx.db.settings.rate, methods: methods.map(m => ({ ...PAY_METHODS[m], info: m === 'card' ? null : info[m], fields: PAY_FIELDS[m] || [] })) };
+}, { write: false });
+
+route('GET', '/api/me/orders', ({ db, user }) => db.orders.filter(o => o.userId === user.id).map(o => orderView(o, db)).reverse(), { auth: true, write: false });
+
+// Al volver de Stripe se consulta la sesión, por si el webhook aún no llegó.
+route('POST', '/api/orders/:id/refresh', async ({ db, user, params, payments }) => {
+  const o = db.orders.find(x => x.id === params.id && x.userId === user.id);
+  if (!o) fail(404, 'Orden no encontrada.');
+  if (o.status === 'pending' && o.method === 'card' && payments?.card) {
+    const s = await payments.card.fetch(o.providerRef);
+    if (s.paid) applyOrder(db, o, { by: 'stripe', ref: o.providerRef });
+  }
+  return orderView(o, db);
+}, { auth: true });
+
+route('DELETE', '/api/orders/:id', ({ db, user, params }) => {
+  const o = db.orders.find(x => x.id === params.id && x.userId === user.id);
+  if (!o || !['pending', 'review'].includes(o.status)) fail(400, 'Esta orden ya no se puede anular.');
+  o.status = 'cancelled';
+  return orderView(o, db);
+}, { auth: true });
+
+route('GET', '/api/admin/orders', ({ db, query }) => db.orders.filter(o => !query.status || (o.status || 'paid') === query.status)
+  .map(o => ({ ...orderView(o, db), user: publicUser(db.users.find(u => u.id === o.userId)) })).reverse().slice(0, 200), { auth: true, roles: ['admin'], write: false });
+
+route('POST', '/api/admin/orders/:id', ({ db, params, body, user }) => {
+  const o = db.orders.find(x => x.id === params.id);
+  if (!o || o.status !== 'review') fail(400, 'Solo se pueden verificar pagos en revisión.');
+  if (body.approve) applyOrder(db, o, { by: user.email });
+  else Object.assign(o, { status: 'rejected', note: clean(body.note) || 'No encontramos el pago con esa referencia.' });
+  return orderView(o, db);
+}, { auth: true, roles: ['admin'] });
+
+route('GET', '/api/admin/payinfo', ({ db }) => ({ info: payInfoOf(db), fields: PAY_FIELDS, methods: PAY_METHODS }), { auth: true, roles: ['admin'], write: false });
+
+route('POST', '/api/admin/payinfo', ({ db, body }) => {
+  const info = {};
+  for (const [m, fields] of Object.entries(PAY_FIELDS)) info[m] = Object.fromEntries(fields.map(([k]) => [k, clean(body[m]?.[k]).slice(0, 200)]));
+  db.settings.payInfo = info;
+  return { info };
+}, { auth: true, roles: ['admin'] });
 
 /* Avisos */
 
@@ -331,7 +456,7 @@ route('GET', '/api/listings', ({ db, query, user }) => {
   };
 }, { write: false });
 
-route('GET', '/api/listings/:id', ({ db, params, user }) => {
+route('GET', '/api/listings/:id', async ({ db, params, user, signFile }) => {
   const l = db.listings.find(x => x.id === params.id && x.status !== 'deleted');
   if (!l) fail(404, 'Este aviso no existe o fue retirado.');
   const mine = user && (user.id === l.ownerId || user.role === 'admin');
@@ -342,7 +467,7 @@ route('GET', '/api/listings/:id', ({ db, params, user }) => {
   const similar = filterListings(db, { op: l.op, zone: l.zone }).filter(x => x.id !== l.id).slice(0, 4);
   const canSeeDocs = mine || (user && planOf(user).network) || (user && db.diligence.some(d => d.listingId === l.id && d.userId === user.id));
   return {
-    listing: { ...decorate(l, db, medians, user), docs: canSeeDocs ? l.docs : (l.docs || []).map(d => ({ kind: d.kind })) },
+    listing: { ...decorate(l, db, medians, user), docs: canSeeDocs ? await signDocs(l.docs, signFile) : (l.docs || []).map(d => ({ kind: d.kind })) },
     zoneStats: medians[`${l.zone}|${l.op}`] || null,
     avm, similar: similar.map(x => decorate(x, db, medians, user)),
     canSeeDocs: !!canSeeDocs,
@@ -364,6 +489,9 @@ route('POST', '/api/listings', async ({ db, user, body, storeFile }) => {
   db.listings.push(l);
   return { listing: decorate(l, db, zoneMedians(db), user) };
 }, { auth: true });
+
+// Los documentos legales se guardan en un almacenamiento privado: se entregan con enlaces temporales.
+const signDocs = (docs, signFile) => Promise.all((docs || []).map(async d => ({ ...d, url: d.url ? await signFile(d.url) : null })));
 
 function ownListing(db, user, id) {
   const l = db.listings.find(x => x.id === id && x.status !== 'deleted');
@@ -396,19 +524,19 @@ route('DELETE', '/api/listings/:id', ({ db, user, params }) => {
   return { ok: true };
 }, { auth: true });
 
-route('POST', '/api/listings/:id/boost', ({ db, user, params, body }) => {
+route('POST', '/api/listings/:id/boost', async ctx => {
+  const { db, user, params, body } = ctx;
   const l = ownListing(db, user, params.id);
   const b = BOOSTS[body.kind];
   if (!b) fail(400, 'Opción de visibilidad no válida.');
   const featuredUsed = db.listings.filter(x => x.ownerId === user.id && isBoosted(x) && x.id !== l.id).length;
   const included = planOf(user).featured;
   const free = ['agencia', 'constructora', 'internacional'].includes(user.role) && featuredUsed < included && b.id !== 'newsletter';
-  l.boost = { kind: b.id === 'newsletter' ? (l.boost?.kind || 'destacado') : b.id, until: new Date(Date.now() + b.days * 86400000).toISOString(), newsletter: b.id === 'newsletter' || l.boost?.newsletter };
-  db.orders.push({ id: randomId('o-', 6), userId: user.id, kind: 'boost', item: `${b.id}:${l.id}`, amountUsd: free ? 0 : b.price, createdAt: now() });
-  return { listing: decorate(l, db, zoneMedians(db), user), charged: free ? 0 : b.price, includedInPlan: free };
+  const r = await checkout(ctx, user, body, { kind: 'boost', item: `${b.id}:${l.id}`, title: `${b.name} · ${l.title}`, amountUsd: free ? 0 : b.price });
+  return { ...r, listing: decorate(l, db, zoneMedians(db), user), charged: free ? 0 : b.price, includedInPlan: free };
 }, { auth: true });
 
-route('POST', '/api/listings/:id/documents', async ({ db, user, params, body, storeFile }) => {
+route('POST', '/api/listings/:id/documents', async ({ db, user, params, body, storeFile, signFile }) => {
   const l = ownListing(db, user, params.id);
   const docs = Array.isArray(body.docs) ? body.docs : [];
   if (!docs.length) fail(400, 'Adjunta al menos un documento.');
@@ -421,7 +549,7 @@ route('POST', '/api/listings/:id/documents', async ({ db, user, params, body, st
   const hasCore = ['titulo', 'gravamen'].every(k => l.docs.some(d => d.kind === k));
   l.verification = hasCore ? 'pending' : 'none';
   l.verificationNote = hasCore ? 'Expediente en revisión por el equipo legal.' : 'Faltan el documento de propiedad y el certificado de gravamen.';
-  return { listing: { ...decorate(l, db, zoneMedians(db), user), docs: l.docs } };
+  return { listing: { ...decorate(l, db, zoneMedians(db), user), docs: await signDocs(l.docs, signFile) } };
 }, { auth: true });
 
 /* Contactos (leads) */
@@ -445,7 +573,7 @@ route('POST', '/api/listings/:id/leads', ({ db, params, body, user }) => {
   // Pago por lead calificado para constructoras: se cobra solo si el lead está precalificado.
   if (owner?.role === 'constructora' && lead.prequal?.usdFunds) {
     lead.billedUsd = 6;
-    db.orders.push({ id: randomId('o-', 6), userId: owner.id, kind: 'lead', item: lead.id, amountUsd: 6, createdAt: now() });
+    db.orders.push({ id: randomId('o-', 6), userId: owner.id, kind: 'lead', item: lead.id, title: l.title, amountUsd: 6, status: 'due', createdAt: now() });
   }
   db.leads.push(lead);
   l.contacts = (l.contacts || 0) + 1;
@@ -632,14 +760,13 @@ route('PATCH', '/api/network/referrals/:id', ({ db, user, params, body }) => {
 
 /* Due diligence notarial */
 
-route('POST', '/api/diligence', ({ db, user, body }) => {
+route('POST', '/api/diligence', async ctx => {
+  const { db, user, body } = ctx;
   const pkg = DILIGENCE[body.package];
   const l = db.listings.find(x => x.id === body.listingId && x.status === 'active');
   if (!pkg || !l) fail(400, 'Selecciona inmueble y paquete.');
-  const d = { id: randomId('dd-', 6), userId: user.id, listingId: l.id, listingTitle: l.title, package: pkg.id, priceUsd: pkg.price, status: 'en curso', steps: pkg.items.map(i => ({ item: i, done: false })), createdAt: now() };
-  db.diligence.push(d);
-  db.orders.push({ id: randomId('o-', 6), userId: user.id, kind: 'diligence', item: `${pkg.id}:${l.id}`, amountUsd: pkg.price, createdAt: now() });
-  return d;
+  const r = await checkout(ctx, user, body, { kind: 'diligence', item: `${pkg.id}:${l.id}`, title: `${pkg.name} · ${l.title}`, amountUsd: pkg.price });
+  return { ...r, diligence: db.diligence.find(d => d.orderId === r.order.id) || null };
 }, { auth: true });
 
 route('GET', '/api/diligence', ({ db, user }) => db.diligence.filter(d => d.userId === user.id || user.role === 'admin').reverse(), { auth: true, write: false });
@@ -656,7 +783,7 @@ route('POST', '/api/services', ({ db, body, user }) => {
 
 /* Administración */
 
-route('GET', '/api/admin/queue', ({ db }) => db.listings.filter(l => l.verification === 'pending' && l.status !== 'deleted').map(l => ({ ...l, owner: ownerCard(db.users.find(u => u.id === l.ownerId)) })), { auth: true, roles: ['admin'], write: false });
+route('GET', '/api/admin/queue', ({ db, signFile }) => Promise.all(db.listings.filter(l => l.verification === 'pending' && l.status !== 'deleted').map(async l => ({ ...l, docs: await signDocs(l.docs, signFile), owner: ownerCard(db.users.find(u => u.id === l.ownerId)) }))), { auth: true, roles: ['admin'], write: false });
 
 route('POST', '/api/admin/listings/:id/verify', ({ db, params, body }) => {
   const l = db.listings.find(x => x.id === params.id);
@@ -679,14 +806,14 @@ route('POST', '/api/admin/rate/refresh', async ({ refreshRate, db }) => { const 
 
 route('GET', '/api/admin/stats', ({ db }) => {
   const revenue = {};
-  for (const o of db.orders) revenue[o.kind] = (revenue[o.kind] || 0) + o.amountUsd;
+  for (const o of db.orders) if ((o.status || 'paid') === 'paid') revenue[o.kind] = (revenue[o.kind] || 0) + o.amountUsd;
   const byRole = {};
   for (const u of db.users) byRole[u.role] = (byRole[u.role] || 0) + 1;
   return {
     users: db.users.length, byRole, listings: db.listings.filter(l => l.status === 'active').length,
     pending: db.listings.filter(l => l.verification === 'pending').length, leads: db.leads.length, referrals: db.referrals.length,
-    services: db.services.slice(-20).reverse(), diligence: db.diligence.length, revenue,
-    mrr: db.users.reduce((s, u) => s + (PLANS[u.plan]?.price || 0), 0),
+    services: db.services.slice(-20).reverse(), diligence: db.diligence.length, revenue, toVerify: db.orders.filter(o => o.status === 'review').length,
+    mrr: db.users.reduce((s, u) => s + (planOf(u).price || 0), 0),
     recentUsers: db.users.slice(-8).reverse().map(publicUser),
   };
 }, { auth: true, roles: ['admin'], write: false });

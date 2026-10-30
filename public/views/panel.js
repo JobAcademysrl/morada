@@ -4,6 +4,7 @@ import { $, $$, esc, icon, toast, modal, fmtDate, formData, card, reveal, tilt }
 import { fmtUsd, fmtVes, zoneById, LEAD_STAGES, ZONES, LAW, DOC_KINDS } from '../shared/core.js';
 import { plansHtml } from './home.js';
 import { boostModal } from './listing.js';
+import { checkReturn } from '../pay.js';
 
 const PUBLISHERS = ['particular', 'agencia', 'constructora', 'admin'];
 const PROS = ['agencia', 'constructora', 'internacional'];
@@ -15,7 +16,7 @@ function tabsFor(u, plan) {
     t.push(['pagos', 'Pagos USD / Bs.', 'wallet', !plan.ledger], ['contratos', 'Contratos Ley 2026', 'doc', !plan.contracts], ['red', 'Red internacional', 'globe', !plan.network], ['plan', 'Plan y facturación', 'star']);
   }
   if (u.role === 'particular') t.push(['pagos', 'Pagos USD / Bs.', 'wallet', true], ['contratos', 'Contratos Ley 2026', 'doc', true]);
-  t.push(['busquedas', 'Búsquedas guardadas', 'bell'], ['solicitudes', 'Mis solicitudes', 'key'], ['perfil', 'Perfil', 'user']);
+  t.push(['busquedas', 'Búsquedas guardadas', 'bell'], ['solicitudes', 'Mis solicitudes', 'key'], ['facturas', 'Mis pagos', 'wallet'], ['perfil', 'Perfil', 'user']);
   if (u.role === 'admin') t.push(['admin', 'Administración', 'shield']);
   return t;
 }
@@ -185,9 +186,17 @@ const TABS = {
   },
 
   async plan(box, ctx) {
+    const until = ctx.user.planUntil ? ` Activo hasta el ${fmtDate(ctx.user.planUntil)}.` : '';
+    box.innerHTML = `<div class="stack" style="gap:4px"><h2 style="font-size:1.6rem">Tu plan: ${esc(ctx.plan.name)}</h2><p class="muted">Cada pago activa el plan por 30 días en USD.${until} ${ctx.meta.checkout?.live ? 'Puedes pagar con tarjeta internacional o con los métodos locales disponibles.' : 'Pago simulado en esta versión.'} <a href="#/panel/facturas">Ver mis pagos</a></p></div>${plansHtml(ctx.meta, ctx.user.plan)}`;
+  },
+
+  async facturas(box, ctx) {
+    await checkReturn(ctx);
     const orders = await get('/api/me/orders');
-    box.innerHTML = `<div class="stack" style="gap:4px"><h2 style="font-size:1.6rem">Tu plan: ${esc(ctx.plan.name)}</h2><p class="muted">Cambia de plan cuando quieras. El cobro es mensual en USD. Pago simulado en esta versión.</p></div>${plansHtml(ctx.meta, ctx.user.plan)}
-      <div class="stack"><h3>Movimientos</h3>${orders.length ? `<div class="table-wrap"><table><thead><tr><th>Fecha</th><th>Concepto</th><th class="num">Monto</th></tr></thead><tbody>${orders.map(o => `<tr><td>${fmtDate(o.createdAt)}</td><td>${{ plan: 'Plan ', boost: 'Visibilidad ', slot: 'Avisos adicionales: ', diligence: 'Due diligence ', lead: 'Lead calificado ' }[o.kind] || ''}${esc(String(o.item))}</td><td class="num mono">${fmtUsd(o.amountUsd)}</td></tr>`).join('')}</tbody></table></div>` : '<p class="muted">Sin movimientos todavía.</p>'}</div>`;
+    const st = { paid: ['Pagado', 'tag-ok'], review: ['En verificación', 'tag-warn'], pending: ['Pendiente', 'tag-warn'], rejected: ['Rechazado', 'tag-bad'], cancelled: ['Anulado', ''], due: ['Por cobrar', 'tag-warn'] };
+    box.innerHTML = `<div class="stack" style="gap:4px"><h2 style="font-size:1.6rem">Mis pagos</h2><p class="muted">Los pagos con tarjeta se confirman al instante. Pago Móvil, transferencias, Zelle y USDT los verifica nuestro equipo, normalmente en menos de 24 horas.</p></div>
+      ${orders.length ? `<div class="table-wrap"><table><thead><tr><th>Fecha</th><th>Concepto</th><th>Método</th><th class="num">Monto</th><th>Estado</th><th></th></tr></thead><tbody>${orders.map(o => `<tr><td>${fmtDate(o.createdAt)}</td><td>${esc(o.label)}${o.reference ? `<div class="faint" style="font-size:.78rem">Ref. ${esc(o.reference)}</div>` : ''}${o.note ? `<div style="font-size:.78rem;color:var(--danger)">${esc(o.note)}</div>` : ''}</td><td>${esc(ctx.meta.payMethods?.[o.method]?.name || (o.method ? o.method : '—'))}</td><td class="num mono">${fmtUsd(o.amountUsd)}${o.amountVes ? `<div class="faint" style="font-size:.78rem">${fmtVes(o.amountVes)}</div>` : ''}</td><td><span class="tag ${st[o.status]?.[1] || ''}">${st[o.status]?.[0] || o.status}</span></td><td>${['pending', 'review'].includes(o.status) ? `<button class="btn btn-sm btn-ghost" data-cancel="${o.id}">Anular</button>` : ''}</td></tr>`).join('')}</tbody></table></div>` : '<p class="muted">Sin pagos todavía.</p>'}`;
+    $$('[data-cancel]', box).forEach(b => b.addEventListener('click', async () => { try { await del('/api/orders/' + b.dataset.cancel); toast('Orden anulada.'); reload(ctx); } catch (e) { toast(e.message, 'err'); } }));
   },
 
   async busquedas(box, ctx) {
@@ -218,7 +227,7 @@ const TABS = {
   },
 
   async admin(box, ctx) {
-    const [queue, stats] = await Promise.all([get('/api/admin/queue'), get('/api/admin/stats')]);
+    const [queue, stats, toVerify, pi] = await Promise.all([get('/api/admin/queue'), get('/api/admin/stats'), get('/api/admin/orders?status=review'), get('/api/admin/payinfo')]);
     box.innerHTML = `<h2 style="font-size:1.6rem">Administración</h2>
       <div class="kpis"><div class="kpi"><span>Usuarios</span><b>${stats.users}</b></div><div class="kpi"><span>Avisos activos</span><b>${stats.listings}</b></div><div class="kpi"><span>Ingreso recurrente (MRR)</span><b>${fmtUsd(stats.mrr)}</b></div><div class="kpi"><span>Contactos generados</span><b>${stats.leads}</b></div></div>
       <div class="panel stack" style="gap:12px"><div class="row between"><h3>Tasa oficial BCV</h3><span class="tag ${ctx.meta.rateError ? 'tag-bad' : 'tag-ok'}">${ctx.meta.rateError ? 'Última lectura fallida' : 'Al día'}</span></div>
@@ -227,6 +236,10 @@ const TABS = {
         <label class="check"><input type="checkbox" id="rate-auto" ${ctx.meta.rateAuto ? 'checked' : ''}> Actualizar automáticamente cada 6 horas desde el BCV (respaldo: DolarApi)</label>
         <div class="row"><button class="btn" id="rate-now" type="button">Leer tasa ahora</button></div>
         <form class="row" id="rate-f" style="align-items:end"><label style="flex:1">Cargar manualmente (Bs. por USD)<input class="input" name="rate" type="number" step="0.01" value="${ctx.meta.rate}"></label><button class="btn btn-primary">Guardar tasa</button></form></div>
+      <div class="stack"><h3>Pagos por verificar (${toVerify.length})</h3>${toVerify.length ? `<div class="table-wrap"><table><thead><tr><th>Fecha</th><th>Cliente</th><th>Concepto</th><th>Método y referencia</th><th class="num">Monto</th><th></th></tr></thead><tbody>${toVerify.map(o => `<tr data-o="${o.id}"><td>${fmtDate(o.createdAt)}</td><td>${esc(o.user?.name || '')}<div class="faint" style="font-size:.78rem">${esc(o.user?.email || '')}</div></td><td>${esc(o.label)}</td><td>${esc(pi.methods[o.method]?.name || o.method)}<div class="mono" style="font-size:.82rem;user-select:all">${esc(o.reference)}</div></td><td class="num mono">${o.amountVes ? fmtVes(o.amountVes) : fmtUsd(o.amountUsd)}</td><td class="row" style="gap:6px"><button class="btn btn-sm btn-trust" data-pay-ok>Confirmar</button><button class="btn btn-sm" data-pay-ko>Rechazar</button></td></tr>`).join('')}</tbody></table></div>` : '<p class="muted">No hay pagos pendientes de verificación.</p>'}</div>
+      <details class="panel stack" style="gap:12px"><summary><b>Datos de cobro</b> <span class="faint">(Pago Móvil, transferencia, Zelle, USDT)</span></summary>
+        <p class="muted" style="font-size:.9rem">Un método aparece en el pago cuando todos sus campos están completos. La tarjeta internacional se activa con la clave de Stripe del servidor.</p>
+        <form id="pi-f" class="stack">${Object.entries(pi.fields).map(([m, fields]) => `<fieldset class="stack" style="gap:8px;border:1px solid var(--line);border-radius:12px;padding:12px"><legend><b>${esc(pi.methods[m].name)}</b></legend><div class="form-grid">${fields.map(([k, label]) => `<label>${esc(label)}<input class="input" name="${m}.${k}" value="${esc(pi.info[m]?.[k] || '')}"></label>`).join('')}</div></fieldset>`).join('')}<button class="btn btn-primary" style="justify-self:start">Guardar datos de cobro</button></form></details>
       <div class="stack"><h3>Cola de verificación de títulos (${queue.length})</h3>${queue.length ? queue.map(l => `<div class="panel stack" data-q="${l.id}"><div class="row between"><div><a href="#/inmueble/${l.id}"><b>${esc(l.title)}</b></a><div class="faint" style="font-size:.85rem">${l.id} · ${esc(l.owner?.name || '')} · ${esc(l.address)}</div></div><span class="tag tag-warn">En revisión</span></div><div class="docs-list">${(l.docs || []).map(d => `<div class="doc-row"><span>${icon('doc')} ${esc(DOC_KINDS[d.kind] || d.kind)}</span>${d.url ? `<a class="btn btn-sm" target="_blank" rel="noopener" href="${esc(d.url)}">Abrir</a>` : `<span class="faint">${esc(d.name)}</span>`}</div>`).join('')}</div><input class="input" placeholder="Nota para el anunciante (opcional)" data-note><div class="row"><button class="btn btn-trust" data-ok>${icon('shield')} Otorgar sello</button><button class="btn" data-ko>Rechazar</button></div></div>`).join('') : '<p class="muted">No hay expedientes pendientes.</p>'}</div>
       <div class="grid grid-2"><div class="stack"><h3>Ingresos por línea</h3><div class="bars">${Object.entries(stats.revenue).map(([k, v]) => { const max = Math.max(1, ...Object.values(stats.revenue)); return `<div class="bar-row"><span>${{ plan: 'Planes', boost: 'Visibilidad', slot: 'Avisos particulares', diligence: 'Due diligence', lead: 'Pago por lead' }[k] || k}</span><div class="track"><i style="width:${(v / max) * 100}%"></i></div><span class="mono" style="text-align:right">${fmtUsd(v)}</span></div>`; }).join('') || '<p class="muted">Sin ingresos registrados.</p>'}</div></div>
       <div class="stack"><h3>Usuarios por tipo</h3><div class="bars">${Object.entries(stats.byRole).map(([k, v]) => `<div class="bar-row"><span>${esc(ctx.meta.roles[k])}</span><div class="track"><i style="width:${(v / stats.users) * 100}%"></i></div><span class="mono" style="text-align:right">${v}</span></div>`).join('')}</div></div></div>
@@ -235,6 +248,17 @@ const TABS = {
     $('#rate-f', box).addEventListener('submit', async e => { e.preventDefault(); try { await post('/api/admin/rate', { rate: Number(e.target.rate.value) }); await after('Tasa guardada.'); } catch (err) { toast(err.message, 'err'); } });
     $('#rate-now', box).addEventListener('click', async () => { try { const r = await post('/api/admin/rate/refresh'); await after(`Tasa leída: ${r.rate} Bs./USD.`); } catch (err) { toast(err.message, 'err'); } });
     $('#rate-auto', box).addEventListener('change', async e => { try { await post('/api/admin/rate/auto', { auto: e.target.checked }); await after(e.target.checked ? 'Actualización automática activada.' : 'Actualización automática desactivada.'); } catch (err) { toast(err.message, 'err'); } });
+    $$('[data-o]', box).forEach(r => {
+      const go = async approve => { try { await post('/api/admin/orders/' + r.dataset.o, { approve }); toast(approve ? 'Pago confirmado: la compra quedó activa.' : 'Pago rechazado.'); reload(ctx); } catch (e) { toast(e.message, 'err'); } };
+      $('[data-pay-ok]', r).addEventListener('click', () => go(true));
+      $('[data-pay-ko]', r).addEventListener('click', () => go(false));
+    });
+    $('#pi-f', box).addEventListener('submit', async e => {
+      e.preventDefault();
+      const body = {};
+      for (const [k, v] of new FormData(e.target)) { const [m, f] = k.split('.'); (body[m] ||= {})[f] = v; }
+      try { await post('/api/admin/payinfo', body); const { refreshMeta } = await import('../app.js'); await refreshMeta(); toast('Datos de cobro guardados.'); reload(ctx); } catch (err) { toast(err.message, 'err'); }
+    });
     $$('[data-q]', box).forEach(p => {
       const go = async approve => { await post(`/api/admin/listings/${p.dataset.q}/verify`, { approve, note: $('[data-note]', p).value }); toast(approve ? 'Sello otorgado.' : 'Expediente rechazado.'); reload(ctx); };
       $('[data-ok]', p).addEventListener('click', () => go(true));

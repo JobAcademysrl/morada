@@ -1,5 +1,6 @@
 // Ficha del inmueble: galería, precio bivaluta, indicador frente a la zona, contacto y servicios.
 import { get, post } from '../api.js';
+import { pay } from '../pay.js';
 import { disposeMap, $, $$, esc, icon, card, price, toast, modal, photoOf, photoCount, featureList, typeName, fmtDate, formData, priceText } from '../ui.js';
 import { zoneById, fmtUsd, fmtVes, usdToVes, rentalTerms, loanPayment, LAW, STATES, PAYMENTS, DOC_KINDS, DILIGENCE, BOOSTS, referralSplit } from '../shared/core.js';
 
@@ -190,11 +191,11 @@ export default async function listing(el, ctx) {
   /* Due diligence */
   $$('[data-dd]', el).forEach(b => b.addEventListener('click', () => {
     const p = DILIGENCE[b.dataset.dd];
-    modal(`<span class="eyebrow">Due diligence notarial</span><h3>Paquete ${p.name} · $${p.price}</h3><ul class="stack" style="padding-left:18px;margin:0;gap:6px">${p.items.map(i => `<li>${i}</li>`).join('')}</ul><p class="muted" style="font-size:.9rem">Un abogado acreditado revisa el expediente en el Registro Público de ${esc(z?.name || l.city)} y te entrega un informe en 5 a 10 días hábiles. Al contratarlo tendrás acceso al expediente digital del inmueble.</p><p class="faint" style="font-size:.82rem">Pago simulado en esta versión.</p><button class="btn btn-primary" id="dd-go">Contratar por $${p.price}</button>`, {
+    modal(`<span class="eyebrow">Due diligence notarial</span><h3>Paquete ${p.name} · $${p.price}</h3><ul class="stack" style="padding-left:18px;margin:0;gap:6px">${p.items.map(i => `<li>${i}</li>`).join('')}</ul><p class="muted" style="font-size:.9rem">Un abogado acreditado revisa el expediente en el Registro Público de ${esc(z?.name || l.city)} y te entrega un informe en 5 a 10 días hábiles. Al contratarlo tendrás acceso al expediente digital del inmueble.</p>${ctx.meta.checkout?.live ? '' : '<p class="faint" style="font-size:.82rem">Pago simulado en esta versión.</p>'}<button class="btn btn-primary" id="dd-go">Contratar por $${p.price}</button>`, {
       onMount(body, close) {
         $('#dd-go', body).addEventListener('click', async () => {
           if (!ctx.requireAuth()) { close(); return; }
-          try { await post('/api/diligence', { listingId: l.id, package: p.id }); close(); toast('Due diligence contratada. Sigue el avance en tu panel.'); ctx.go(location.hash); }
+          try { close(); await pay(ctx, { path: '/api/diligence', body: { listingId: l.id, package: p.id }, done: () => { toast('Due diligence contratada. Sigue el avance en tu panel.'); ctx.go(location.hash); } }); }
           catch (err) { toast(err.message, 'err'); }
         });
       },
@@ -227,10 +228,10 @@ export default async function listing(el, ctx) {
 export function boostModal(l, ctx, after) {
   modal(`<span class="eyebrow">Visibilidad</span><h3>Destaca “${esc(l.title)}”</h3>
     <div class="stack" style="gap:10px">${Object.values(BOOSTS).map(b => `<button class="btn" data-b="${b.id}" style="height:auto;padding:14px 16px;justify-content:space-between;border-radius:14px;white-space:normal;text-align:left"><span class="stack" style="gap:2px"><b>${b.name} · ${b.days} días</b><span class="faint" style="font-weight:400;font-size:.85rem">${b.desc}</span></span><b class="mono">$${b.price}</b></button>`).join('')}</div>
-    <p class="faint" style="font-size:.82rem">Los planes profesionales incluyen destacados sin costo. Pago simulado en esta versión.</p>`, {
+    <p class="faint" style="font-size:.82rem">Los planes profesionales incluyen destacados sin costo.${ctx.meta.checkout?.live ? '' : ' Pago simulado en esta versión.'}</p>`, {
     onMount(body, close) {
       $$('[data-b]', body).forEach(b => b.addEventListener('click', async () => {
-        try { const r = await post(`/api/listings/${l.id}/boost`, { kind: b.dataset.b }); close(); toast(r.includedInPlan ? 'Destacado activado (incluido en tu plan).' : `Destacado activado. Cargo: $${r.charged}.`); after ? after() : ctx.go(location.hash); }
+        try { close(); await pay(ctx, { path: `/api/listings/${l.id}/boost`, body: { kind: b.dataset.b }, done: r => { toast(r.includedInPlan ? 'Destacado activado (incluido en tu plan).' : `Destacado activado. Cargo: $${r.charged}.`); after ? after() : ctx.go(location.hash); } }); }
         catch (err) { toast(err.message, 'err'); }
       }));
     },

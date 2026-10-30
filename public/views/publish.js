@@ -1,5 +1,6 @@
 // Asistente de publicación por pasos, con mapa para ubicar el inmueble, sugerencia de precio y carga de documentos.
 import { get, post, patch, mode } from '../api.js';
+import { pay } from '../pay.js';
 import { disposeMap, $, $$, esc, icon, toast, modal, readImage, readFileAsDataUrl, store, fmtUsd, formData, price } from '../ui.js';
 import { ZONES, zoneById, listingTitle } from '../shared/core.js';
 
@@ -27,8 +28,8 @@ export default async function publish(el, ctx) {
     const isPrivate = ['particular', 'comprador'].includes(ctx.user.role);
     el.innerHTML = `<section class="wrap wrap-narrow section"><div class="panel stack"><span class="eyebrow">Límite alcanzado</span><h2>Tienes ${quota.active} de ${quota.limit} avisos activos</h2>
       <p class="muted">${isPrivate ? `Tu primer aviso es gratis. Cada aviso adicional cuesta $${meta.privateExtraPrice} y queda activo hasta que lo marques como vendido o alquilado.` : 'Mejora tu plan para publicar más inmuebles o pausa uno de tus avisos actuales.'}</p>
-      <div class="row">${isPrivate ? `<button class="btn btn-primary" id="buy">Comprar 1 aviso por $${meta.privateExtraPrice}</button>` : '<a class="btn btn-primary" href="#/panel/plan">Ver planes</a>'}<a class="btn" href="#/panel/avisos">Gestionar mis avisos</a></div><p class="faint" style="font-size:.82rem">Pago simulado en esta versión.</p></div></section>`;
-    $('#buy', el)?.addEventListener('click', async () => { try { await post('/api/me/slots', { qty: 1 }); toast('Aviso adicional disponible.'); await ctx.refreshUser(); ctx.go('#/publicar'); } catch (e) { toast(e.message, 'err'); } });
+      <div class="row">${isPrivate ? `<button class="btn btn-primary" id="buy">Comprar 1 aviso por $${meta.privateExtraPrice}</button>` : '<a class="btn btn-primary" href="#/panel/plan">Ver planes</a>'}<a class="btn" href="#/panel/avisos">Gestionar mis avisos</a></div>${meta.checkout?.live ? '' : '<p class="faint" style="font-size:.82rem">Pago simulado en esta versión.</p>'}</div></section>`;
+    $('#buy', el)?.addEventListener('click', async () => { try { await pay(ctx, { path: '/api/me/slots', body: { qty: 1 }, done: async () => { toast('Aviso adicional disponible.'); await ctx.refreshUser(); ctx.go('#/publicar'); } }); } catch (e) { toast(e.message, 'err'); } });
     return;
   }
 

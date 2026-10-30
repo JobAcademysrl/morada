@@ -9,6 +9,7 @@ import publish from './views/publish.js';
 import panel from './views/panel.js';
 import { auth } from './views/auth.js';
 import { valuation, market, investors, professionals, law, favorites, services } from './views/tools.js';
+import { pay, checkReturn } from './pay.js';
 
 export const ctx = {
   meta: null,
@@ -130,14 +131,14 @@ function bindChrome() {
     bar.style.transform = `scaleX(${h > 0 ? scrollY / h : 0})`;
   };
   addEventListener('scroll', onScroll, { passive: true });
-  // Elección de plan desde cualquier tabla de precios (checkout simulado)
+  // Elección de plan desde cualquier tabla de precios
   document.addEventListener('click', async e => {
     const b = e.target.closest('[data-plan]');
     if (!b) return;
     const u = session.user;
     if (!u) { ctx.go('#/registro?role=agencia&plan=' + b.dataset.plan); return; }
     if (!['agencia', 'constructora', 'internacional'].includes(u.role)) { toast('Los planes son para cuentas de agencia, constructora o broker internacional.', 'err'); return; }
-    try { await post('/api/me/plan', { plan: b.dataset.plan }); await ctx.refreshUser(); toast(`Plan ${ctx.plan.name} activado.`); render(); }
+    try { await pay(ctx, { path: '/api/me/plan', body: { plan: b.dataset.plan }, done: async () => { await ctx.refreshUser(); toast(`Plan ${ctx.plan.name} activado.`); render(); } }); }
     catch (err) { toast(err.message, 'err'); }
   });
   // Favoritos desde cualquier tarjeta
@@ -158,6 +159,7 @@ async function boot() {
   ctx.meta = await get('/api/meta');
   currency.rate = ctx.meta.rate;
   if (session.token) await ctx.refreshUser();
+  await checkReturn(ctx);
   bindChrome(); paintHeader(); paintFooter();
   if (!mode.server) {
     const b = $('#demo-banner');

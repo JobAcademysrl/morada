@@ -200,3 +200,13 @@ th { font-family: var(--body); letter-spacing: .02em; background: var(--surface)
 .footer .logo-word, .footer .logo-word b { color: #fff; }
 .demo-banner { background: var(--brand-soft); color: var(--brand); border-color: transparent; }
 .demo-banner button { color: var(--brand); }
+
+/* Pago */
+.pay-total { margin: 4px 0 2px; font-size: 1.05rem; }
+.pay-methods { display: grid; gap: 8px; }
+.pay-method { display: flex; align-items: center; justify-content: space-between; gap: 12px; width: 100%; padding: 12px 14px; border: 1px solid var(--line); border-radius: 8px; background: var(--bg); color: var(--fg); font: inherit; text-align: left; cursor: pointer; transition: border-color var(--dur) var(--ease), box-shadow var(--dur) var(--ease); }
+.pay-method .faint { font-size: .82rem; font-weight: 400; }
+.pay-method:hover { box-shadow: var(--shadow); }
+.pay-method.on { border-color: var(--brand); box-shadow: 0 0 0 1px var(--brand); }
+.pay-method:disabled { opacity: .6; cursor: progress; }
+.pay-info { display: grid; grid-template-columns: max-content minmax(0, 1fr); gap: 6px 14px; font-size: .9rem; }

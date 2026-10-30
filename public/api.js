@@ -4,12 +4,14 @@ import { createEngine, emptyDb, seedDb } from './shared/engine.js';
 import { store } from './ui.js';
 
 const DB_KEY = 'db-v1';
+// En GitHub Pages la API vive en Supabase; con el servidor Node es el mismo origen.
+const API = /\.github\.io$/.test(location.hostname) ? 'https://gjyipfrmneqnosgsyqoa.supabase.co/functions/v1/api' : '';
 let local = null;
 export const mode = { server: false };
 
 async function detectServer() {
   try {
-    const r = await fetch('/api/health', { cache: 'no-store' });
+    const r = await fetch(API + '/api/health', { cache: 'no-store' });
     const j = await r.json();
     return j && j.ok === true;
   } catch { return false; }
@@ -44,7 +46,7 @@ export async function api(method, path, body) {
   const query = Object.fromEntries(new URLSearchParams(qs || ''));
   let status, data;
   if (mode.server) {
-    const res = await fetch(path, {
+    const res = await fetch(API + path, {
       method,
       headers: { 'Content-Type': 'application/json', ...(session.token ? { Authorization: 'Bearer ' + session.token } : {}) },
       body: method === 'GET' ? undefined : JSON.stringify(body || {}),
