@@ -29,6 +29,7 @@ export async function pay(ctx, { path, body = {}, done }) {
           try {
             const r = await post(path, { ...body, method: 'card', returnUrl: location.href.split('#')[0] });
             store.set('pendingOrder', r.order.id);
+            close();
             location.href = r.checkoutUrl;
           } catch (e) { b.disabled = false; toast(e.message, 'err'); }
           return;

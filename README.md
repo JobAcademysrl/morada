@@ -56,9 +56,19 @@ Al primo avvio viene creato `data/db.json` con dati di esempio (fittizi). Accoun
 - `public/` – SPA in JavaScript moderno senza build: router a hash, viste in `views/`, Leaflet + MarkerCluster inclusi in `vendor/`.
 - Senza server (es. pagina statica) l'app usa lo stesso motore nel browser con `localStorage` ("modo demo").
 
-## Simulato in questa versione
+## Backend online (Supabase) e pagamenti
 
-Pagamenti (piani, visibilità, due diligence), escrow, OCR dei documenti, invio email/notifiche e WhatsApp Business API.
+Il sito su GitHub Pages usa l'API pubblicata su Supabase (progetto `morada`, Edge Function `api`): stesso motore di `shared/engine.js`, dati in Postgres (`morada_kv`, una riga per collezione), foto nel bucket pubblico `photos`, documenti legali nel bucket privato `docs` (link firmati da 15 minuti). Se l'API non risponde il sito torna in modo demo.
+
+- Codice: `supabase/functions/api/index.ts`, schema in `supabase/migrations/`. L'Edge Function importa `shared/` da GitHub fissato a un commit: dopo aver cambiato `shared/`, push, aggiornare lo SHA negli import e ripubblicare la funzione.
+- Pagamenti: ogni acquisto (piano 30 giorni, annuncio extra, visibilità, due diligence) crea un ordine. **Carta internazionale** con Stripe Checkout (conferma automatica via webhook o al ritorno sul sito). **Pago Móvil, bonifico in Bs., Zelle, USDT**: il cliente invia la referenza e l'admin conferma in *Mi panel › Administración › Pagos por verificar*. I dati di incasso si inseriscono nello stesso pannello: un metodo appare solo quando i suoi campi sono completi.
+- Segreti della funzione (Supabase › Edge Functions › Secrets): `STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET`, `MORADA_ADMIN_PASSWORD` (senza, l'account admin è bloccato), opzionali `MORADA_ADMIN_EMAIL`, `SITE_URL`.
+- Webhook Stripe: `https://gjyipfrmneqnosgsyqoa.supabase.co/functions/v1/api/stripe-webhook`, evento `checkout.session.completed`.
+- Con `npm start` in locale i pagamenti restano simulati (acquisto applicato subito).
+
+## Ancora simulato
+
+Escrow, OCR dei documenti, invio email/notifiche e WhatsApp Business API.
 
 ## Tasso BCV automatico
 

@@ -1,9 +1,9 @@
 // API de Morada en Supabase Edge Functions: el mismo motor de shared/engine.js, con
 // persistencia en Postgres (tabla morada_kv), archivos en Storage y cobros con Stripe.
-// Los archivos de shared/ se copian junto a este al desplegar (ver scripts/deploy-supabase.mjs).
+// El motor se importa de shared/ fijado a un commit: tras cambiar shared/, haz push y actualiza el SHA de abajo.
 import postgres from 'npm:postgres@3.4.5';
-import { createEngine, emptyDb, seedDb, hashPassword, checkPassword } from './engine.js';
-import { fetchOfficialRate } from './rates.js';
+import { createEngine, emptyDb, seedDb, hashPassword, checkPassword } from 'https://raw.githubusercontent.com/JobAcademysrl/morada/5c2c2b0f4b6bc182020c35aa5d6a79bf58add895/shared/engine.js';
+import { fetchOfficialRate } from 'https://raw.githubusercontent.com/JobAcademysrl/morada/5c2c2b0f4b6bc182020c35aa5d6a79bf58add895/shared/rates.js';
 
 const env = (k: string) => Deno.env.get(k) || '';
 const SUPABASE_URL = env('SUPABASE_URL');
@@ -38,7 +38,7 @@ async function save() {
   for (const [k, val] of Object.entries(db)) {
     const s = JSON.stringify(val);
     if (s === snap[k]) continue;
-    await q`insert into morada_kv (k, v) values (${k}, ${s}::jsonb) on conflict (k) do update set v = excluded.v, updated_at = now()`;
+    await q`insert into morada_kv (k, v) values (${k}, ${sql.json(val)}) on conflict (k) do update set v = excluded.v, updated_at = now()`;
     snap[k] = s; changed = true;
   }
   if (changed) version = Number((await q`update morada_meta set version = version + 1 where id = 1 returning version`)[0].version);
